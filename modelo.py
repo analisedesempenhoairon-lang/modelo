@@ -211,7 +211,7 @@ df_lin, df_gol = carregar_radares_csv(URL_RADAR_LINHA, URL_RADAR_GOLEIROS)
 # --- SIDEBAR ---
 st.sidebar.image(corrigir_link_imagem(URL_LOGO), width=160)
 st.sidebar.markdown("### DATA INTELLIGENCE")
-if st.sidebar.button("Home Page"): st.session_state.tela = 'Home'
+if st.sidebar.button("HOME"): st.session_state.tela = 'Home'
 if st.sidebar.button("OVERVIEW"): st.session_state.tela = 'Equipe'
 if st.sidebar.button("SQUAD"): st.session_state.tela = 'Grid'
 st.sidebar.divider()
@@ -232,8 +232,8 @@ if not df_camp.empty and col_link:
         f = df_camp[df_camp['Jogo_Label'] == jogo_sel]
         df_jogo = carregar_scouts_jogos(f[col_link].tolist(), f['Jogo_Label'].tolist(), df_ele)
         
-    st.sidebar.markdown("### TEMPO DE JOGO")
-    min_slider = st.sidebar.slider("Minutos", 0, 100, (0, 95))
+    st.sidebar.markdown("### Current Minute")
+    min_slider = st.sidebar.slider("Minutes", 0, 100, (0, 95))
     if not df_jogo.empty:
         df_jogo_filtrado = df_jogo[(df_jogo['Minuto'] >= min_slider[0]) & (df_jogo['Minuto'] <= min_slider[1])]
     else:
@@ -266,7 +266,7 @@ elif st.session_state.tela == 'Equipe':
         m4.metric("Goals For", int(gols_pro))
         st.divider()
 
-    t1, t2, t3 = st.tabs(["Classificação", "Estatísticas", "Campo de Jogo"])
+    t1, t2, t3 = st.tabs(["League Table", "Statistics", "Pitch"])
     
     with t1:
         if not df_class.empty:
@@ -416,3 +416,4 @@ elif st.session_state.tela == 'Player':
             st.graphviz_chart(dot)
 
     except: pass
+

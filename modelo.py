@@ -224,7 +224,7 @@ for c in df_camp.columns:
 
 if not df_camp.empty and col_link:
     df_camp['Jogo_Label'] = "Jogo " + df_camp.index.astype(str) + " vs " + df_camp['Adversário'].astype(str)
-    jogo_sel = st.sidebar.selectbox("Selecionar Jogo", ["Todos"] + df_camp['Jogo_Label'].tolist())
+    jogo_sel = st.sidebar.selectbox("Select Game", ["Season"] + df_camp['Jogo_Label'].tolist())
     
     if jogo_sel == "Todos":
         df_jogo = carregar_scouts_jogos(df_camp[col_link].tolist(), df_camp['Jogo_Label'].tolist(), df_ele)
@@ -416,4 +416,5 @@ elif st.session_state.tela == 'Player':
             st.graphviz_chart(dot)
 
     except: pass
+
 

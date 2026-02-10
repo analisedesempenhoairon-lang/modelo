@@ -36,13 +36,31 @@ URL_CLASSIFICACAO = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOoM4UZ8Ix
 URL_CARTOES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOoM4UZ8IxNDqxB9uoIqxaYjEbMjfjz2vxiW3yzuOgAY_DfeGajiPW075soqh0yVIbWUlHBTsqxdGE/pub?gid=1354689566&single=true&output=csv"
 URL_LIDERES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOoM4UZ8IxNDqxB9uoIqxaYjEbMjfjz2vxiW3yzuOgAY_DfeGajiPW075soqh0yVIbWUlHBTsqxdGE/pub?gid=0&single=true&output=csv"
 URL_ELENCO = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOoM4UZ8IxNDqxB9uoIqxaYjEbMjfjz2vxiW3yzuOgAY_DfeGajiPW075soqh0yVIbWUlHBTsqxdGE/pub?gid=340587611&single=true&output=csv"
-URL_RADAR_LINHA = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOoM4UZ8IxNDqxB9uoIqxaYjEbMjfjz2vxiW3yzuOgAY_DfeGajiPW075soqh0yVIbWUlHBTsqxdGE/pub?gid=1498291741&single=true&output=csv"
+# SEU NOVO LINK DE RADAR AQUI:
+URL_RADAR_LINHA = "https://docs.google.com/spreadsheets/d/1mWXD93c1IMIrTIbDQkwrdh-LSCBMczKtOEvFKCXUWKs/export?format=csv"
+# Assumindo que goleiros estão na mesma ou manter o antigo se for separado. Vou usar o mesmo por precaução.
 URL_RADAR_GOLEIROS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOoM4UZ8IxNDqxB9uoIqxaYjEbMjfjz2vxiW3yzuOgAY_DfeGajiPW075soqh0yVIbWUlHBTsqxdGE/pub?gid=1857870630&single=true&output=csv"
 URL_MVE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSOoM4UZ8IxNDqxB9uoIqxaYjEbMjfjz2vxiW3yzuOgAY_DfeGajiPW075soqh0yVIbWUlHBTsqxdGE/pub?gid=1682508291&single=true&output=csv"
 
 # --- CORES E TEMA ---
 CORES_GERAIS = {"Background": "#0F172A", "Sidebar": "#1E293B", "Destaque": "#38BDF8", "Texto": "#F8FAFC", "Card": "#334155"}
 CORES_EQUIPES = {"A.A. Serrana/FZ": "#90EE90", "ACM/Estacaville": "#228B22", "América FC": "#FF4500", "Aviação F.C.": "#1E90FF", "Caxias F.C.": "#E2E8F0", "E.C. Panagua": "#3B82F6", "G.E. Pirabeiraba": "#EF4444", "Pará FC": "#0EA5E9", "Serbi": "#10B981", "Sercos": "#F59E0B"}
+
+# DICIONARIO DE TRADUÇÃO (PT -> EN) PARA O RADAR
+TRADUCAO_METRICAS = {
+    'Passe Progressivo': 'Prog. Pass',
+    'Passe Ultimo Terço': 'Final 1/3 Pass',
+    'Passe Chave': 'Key Pass',
+    'Duelos Aereos': 'Aerial Duels',
+    'Ações Defensivas': 'Def. Actions',
+    'Desarmes': 'Tackles',
+    'Conduções': 'Carries',
+    'Finalizações': 'Shots',
+    'Cruzamentos': 'Crosses',
+    'Dribles': 'Dribbles',
+    'Interceptações': 'Intercepts',
+    'Perdas de Bola': 'Ball Losses'
+}
 
 st.markdown(f"""
     <style>
@@ -58,10 +76,11 @@ st.markdown(f"""
 def converter_link_drive(url):
     if pd.isna(url): return url
     url_str = str(url).strip()
-    if "export=download" in url_str: return url_str
+    if "export=download" in url_str or "export?format=csv" in url_str: return url_str
     if "/d/" in url_str:
         try:
             file_id = url_str.split("/d/")[1].split("/")[0]
+            # Detecta se é CSV ou XLSX pelo contexto, mas padrão é export=download para Excel do LongoMatch
             return f"https://drive.google.com/uc?export=download&id={file_id}"
         except: return url_str
     return url_str
@@ -87,39 +106,56 @@ def carregar_planilha_csv(url):
 @st.cache_data(ttl=60)
 def carregar_radares_csv(url_linha, url_goleiros):
     try:
-        df_l = pd.read_csv(url_linha)
+        # Tenta ler como CSV
+        try:
+            df_l = pd.read_csv(url_linha)
+        except:
+            # Fallback para Excel se o link for de planilha exportada
+            df_l = pd.read_excel(url_linha)
+            
         df_g = pd.read_csv(url_goleiros)
+        
         if not df_l.empty: df_l = df_l.set_index(df_l.columns[0])
         if not df_g.empty: df_g = df_g.set_index(df_g.columns[0])
         return df_l, df_g
-    except: return pd.DataFrame(), pd.DataFrame()
+    except Exception as e:
+        # st.error(f"Erro ao carregar radares: {e}") 
+        return pd.DataFrame(), pd.DataFrame()
 
 def separar_dados_atleta(df, atleta, tipo='linha'):
     if df is None or atleta not in df.index: return None, None, None
     try:
         row = df.loc[atleta].iloc[0] if isinstance(df.loc[atleta], pd.DataFrame) else df.loc[atleta]
         cols = df.columns.tolist()
-        idx_jogo = next((i for i, c in enumerate(cols) if str(c).upper().strip().startswith('JOGO')), len(cols)//2)
+        
+        # PROCURA POR "JOGO", "GAME", "MATCH" PARA DIVIDIR
+        idx_jogo = -1
+        for i, c in enumerate(cols):
+            if str(c).upper().strip() in ['JOGO', 'GAME', 'MATCH', 'PARTIDA']:
+                idx_jogo = i
+                break
+        
+        if idx_jogo == -1: idx_jogo = len(cols)//2
+        
         return row.iloc[:idx_jogo//2], row.iloc[idx_jogo//2:idx_jogo], row.iloc[idx_jogo:]
     except: return None, None, None
+
+def traduzir_indices(serie):
+    if serie is None: return serie
+    # Traduz os nomes das métricas (index) usando o dicionário
+    novos_indices = [TRADUCAO_METRICAS.get(i.strip(), i.strip()) for i in serie.index]
+    serie.index = novos_indices
+    return serie
 
 @st.cache_data(ttl=300)
 def carregar_scouts_jogos(links, nomes, df_elenco_ref):
     if not links: return pd.DataFrame()
     dfs = []
     
-    # CRIA O DICIONÁRIO DE NOMES (ARQUIVO -> REAL)
     dict_nomes = {}
     if not df_elenco_ref.empty:
-        # Tenta achar colunas automaticamente
-        col_arquivo = next((c for c in df_elenco_ref.columns if 'Arquivo' in c or 'Ref' in c), None)
-        # Tenta pegar coluna que tenha "Nome" e "Real", senão pega a segunda coluna
-        col_real = next((c for c in df_elenco_ref.columns if 'Nome' in c and 'Real' in c), None)
-        
-        # Fallback se não encontrar os nomes exatos das colunas
-        if not col_arquivo: col_arquivo = df_elenco_ref.columns[0]
-        if not col_real: col_real = df_elenco_ref.columns[1] if len(df_elenco_ref.columns)>1 else df_elenco_ref.columns[0]
-        
+        col_arquivo = next((c for c in df_elenco_ref.columns if 'Arquivo' in c or 'Ref' in c), df_elenco_ref.columns[0])
+        col_real = next((c for c in df_elenco_ref.columns if 'Nome' in c and 'Real' in c), df_elenco_ref.columns[1])
         dict_nomes = dict(zip(df_elenco_ref[col_arquivo], df_elenco_ref[col_real]))
 
     for url, nome in zip(links, nomes):
@@ -168,25 +204,17 @@ def carregar_scouts_jogos(links, nomes, df_elenco_ref):
     if 'FieldX' in df.columns:
         df['FieldX'] = pd.to_numeric(df['FieldX'].astype(str).str.replace(',', '.'), errors='coerce')
         df['FieldY'] = pd.to_numeric(df['FieldY'].astype(str).str.replace(',', '.'), errors='coerce')
-        
         max_x = df['FieldX'].max()
-        if max_x <= 1.1: 
-            df['FieldX'] *= 120; df['FieldY'] *= 80
-        elif max_x <= 105: 
-            df['FieldX'] = (df['FieldX']/100)*120; df['FieldY'] = (df['FieldY']/100)*80
-        
-        # INVERSÃO DO EIXO Y (CORREÇÃO DE LADOS)
+        if max_x <= 1.1: df['FieldX'] *= 120; df['FieldY'] *= 80
+        elif max_x <= 105: df['FieldX'] = (df['FieldX']/100)*120; df['FieldY'] = (df['FieldY']/100)*80
         df['FieldY'] = 80 - df['FieldY']
 
     if 'Jogadores' in df.columns:
         df['Passador'] = df['Jogadores'].astype(str).apply(lambda x: x.split('|')[0].strip())
         df['Receptor'] = df['Jogadores'].astype(str).apply(lambda x: x.split('|')[1].strip() if '|' in x else None)
-        
-        # SUBSTITUIÇÃO PELO NOME REAL
         if dict_nomes:
             df['Passador'] = df['Passador'].map(dict_nomes).fillna(df['Passador'])
             df['Receptor'] = df['Receptor'].map(dict_nomes).fillna(df['Receptor'])
-            
         df['Jogadores'] = df['Passador']
         
     return df
@@ -224,9 +252,11 @@ for c in df_camp.columns:
 
 if not df_camp.empty and col_link:
     df_camp['Jogo_Label'] = "Jogo " + df_camp.index.astype(str) + " vs " + df_camp['Adversário'].astype(str)
+    # Seletor com "Season"
     jogo_sel = st.sidebar.selectbox("Select Game", ["Season"] + df_camp['Jogo_Label'].tolist())
     
-    if jogo_sel == "Todos":
+    # CORREÇÃO: "Season" é o novo "Todos"
+    if jogo_sel == "Season": 
         df_jogo = carregar_scouts_jogos(df_camp[col_link].tolist(), df_camp['Jogo_Label'].tolist(), df_ele)
     else:
         f = df_camp[df_camp['Jogo_Label'] == jogo_sel]
@@ -245,36 +275,45 @@ else:
 if st.session_state.tela == 'Home':
     st.title("WELCOME TO DATA INTELLIGENCE")
     c1, c2 = st.columns(2)
-    c1.info("System connected. Use the sidebar to navigate..")
+    c1.info("System connected. Use the sidebar to navigate.")
 
 elif st.session_state.tela == 'Equipe':
     st.title("Tactical and Collective Analysis")
     
     if not df_camp.empty:
         st.subheader("Season Performance")
-        vitorias = len(df_camp[df_camp['Resultado'].str.contains('Vitória', na=False, case=False)])
-        empates = len(df_camp[df_camp['Resultado'].str.contains('Empate', na=False, case=False)])
-        jogos = len(df_camp)
-        pontos = (vitorias * 3) + empates
-        aproveitamento = (pontos / (jogos * 3)) * 100 if jogos > 0 else 0
-        gols_pro = pd.to_numeric(df_camp['Gols Pro'], errors='coerce').sum()
+        # Proteção contra nomes de colunas (caso planilha seja PT)
+        col_res = 'Resultado' if 'Resultado' in df_camp.columns else df_camp.columns[2] # Fallback
+        col_gols = 'Gols Pro' if 'Gols Pro' in df_camp.columns else 'GF'
         
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Win Rate", f"{aproveitamento:.1f}%")
-        m2.metric("Wins", vitorias)
-        m3.metric("Matches", jogos)
-        m4.metric("Goals For", int(gols_pro))
+        try:
+            vitorias = len(df_camp[df_camp[col_res].astype(str).str.contains('Vitória|Win', na=False, case=False)])
+            jogos = len(df_camp)
+            # Simplificação de cálculo de pontos
+            # (Assumindo empates e derrotas padrão)
+            empates = len(df_camp[df_camp[col_res].astype(str).str.contains('Empate|Draw', na=False, case=False)])
+            pontos = (vitorias * 3) + empates
+            aproveitamento = (pontos / (jogos * 3)) * 100 if jogos > 0 else 0
+            
+            gols_pro = pd.to_numeric(df_camp[col_gols], errors='coerce').sum()
+            
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Win Rate", f"{aproveitamento:.1f}%")
+            m2.metric("Wins", vitorias)
+            m3.metric("Matches", jogos)
+            m4.metric("Goals For", int(gols_pro))
+        except: st.warning("Metrics data unavailable due to column mismatch.")
         st.divider()
 
     t1, t2, t3 = st.tabs(["League Table", "Statistics", "Pitch"])
     
     with t1:
         if not df_class.empty:
-            cols_r = [c for c in df_class.columns if "Rodada" in c]
+            cols_r = [c for c in df_class.columns if "Rodada" in c or "Round" in c]
             if cols_r:
-                df_long = df_class.melt(id_vars=['Equipes'], value_vars=cols_r, var_name='Rodada', value_name='Posicao')
+                df_long = df_class.melt(id_vars=[df_class.columns[0]], value_vars=cols_r, var_name='Rodada', value_name='Posicao')
                 df_long['Rodada_Num'] = df_long['Rodada'].str.extract('(\d+)').astype(int)
-                fig = px.line(df_long, x="Rodada_Num", y="Posicao", color="Equipes", markers=True, color_discrete_map=CORES_EQUIPES)
+                fig = px.line(df_long, x="Rodada_Num", y="Posicao", color=df_class.columns[0], markers=True, color_discrete_map=CORES_EQUIPES)
                 fig.update_yaxes(autorange="reversed"); st.plotly_chart(fig, use_container_width=True)
 
     with t2:
@@ -292,7 +331,6 @@ elif st.session_state.tela == 'Equipe':
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='#1E293B', line_color='#64748B')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 pitch.scatter(df_jogo_filtrado.FieldX, df_jogo_filtrado.FieldY, ax=ax, c='#38BDF8', s=30, alpha=0.6, edgecolors='white')
-                # CORRIGIDO: CMAP VÁLIDO
                 pitch.kdeplot(df_jogo_filtrado.FieldX, df_jogo_filtrado.FieldY, ax=ax, cmap='GnBu', fill=True, alpha=0.3, levels=50)
                 st.pyplot(fig)
             
@@ -315,13 +353,13 @@ elif st.session_state.tela == 'Equipe':
                         for pl, row in avg_loc.iterrows():
                             pitch_net.annotate(pl, (row.FieldX, row.FieldY-3), ax=ax_net, color='white', ha='center', fontsize=9, weight='bold')
                         st.pyplot(fig_net)
-                    else: st.warning("Sem dados de passes completos neste período.")
-                else: st.info("Coluna 'Receptor' não encontrada no arquivo.")
+                    else: st.warning("No pass data available for this period.")
+                else: st.info("Receptor data missing.")
         else:
-             st.warning("Selecione um jogo na barra lateral para ver a análise tática.")
+             st.warning("Select 'Season' or a Game to view tactical analysis.")
 
 elif st.session_state.tela == 'Grid':
-    st.title("Elenco")
+    st.title("Squad")
     if not df_ele.empty:
         col_nome_real = next((c for c in df_ele.columns if 'Nome' in c and 'Real' in c), df_ele.columns[1])
         cols = st.columns(5)
@@ -349,22 +387,31 @@ elif st.session_state.tela == 'Player':
              st.markdown("👤")
              
     with col_info:
-        st.metric("Posição", dados_atleta.get('Posicao', '-'))
-        st.metric("Pé Dominante", dados_atleta.get('Pe_Dominante', '-'))
+        st.metric("Position", dados_atleta.get('Posicao', '-'))
+        st.metric("Preferred Foot", dados_atleta.get('Pe_Dominante', '-'))
         st.metric("Number", dados_atleta.get('Numero', '-'))
 
     st.divider()
     tipo = 'goleiro' if 'Goleiro' in str(dados_atleta.get('Posicao', '')) else 'linha'
     df_r = df_gol if tipo=='goleiro' else df_lin
-    da, dv, dm = separar_dados_atleta(df_r, p, tipo)
     
-    c1, c2 = st.columns(2)
-    if da is not None: c1.plotly_chart(plot_radar(pd.to_numeric(da, errors='coerce').fillna(0).index, pd.to_numeric(da, errors='coerce').fillna(0).values, "Técnica"), use_container_width=True)
-    if dv is not None: c2.plotly_chart(plot_radar(pd.to_numeric(dv, errors='coerce').fillna(0).index, pd.to_numeric(dv, errors='coerce').fillna(0).values, "Volume", '#10B981', pd.to_numeric(dv, errors='coerce').fillna(0).max()), use_container_width=True)
+    # PROTEÇÃO CONTRA KEYERROR (Se o nome não bater na planilha de radar)
+    if p in df_r.index:
+        da, dv, dm = separar_dados_atleta(df_r, p, tipo)
+        
+        # TRADUÇÃO DOS GRÁFICOS
+        da = traduzir_indices(da)
+        dv = traduzir_indices(dv)
+
+        c1, c2 = st.columns(2)
+        if da is not None: c1.plotly_chart(plot_radar(pd.to_numeric(da, errors='coerce').fillna(0).index, pd.to_numeric(da, errors='coerce').fillna(0).values, "Technical"), use_container_width=True)
+        if dv is not None: c2.plotly_chart(plot_radar(pd.to_numeric(dv, errors='coerce').fillna(0).index, pd.to_numeric(dv, errors='coerce').fillna(0).values, "Volume", '#10B981', pd.to_numeric(dv, errors='coerce').fillna(0).max()), use_container_width=True)
+    else:
+        st.warning(f"Radar data not found for {p}. Check if the name in 'Elenco' matches the Radar spreadsheet.")
 
     if not df_jogo_filtrado.empty:
         st.divider()
-        st.subheader(f"Mapa de Ações: {p} ({min_slider[0]}'-{min_slider[1]}')")
+        st.subheader(f"Action Map: {p} ({min_slider[0]}'-{min_slider[1]}')")
         df_p = df_jogo_filtrado[df_jogo_filtrado['Jogadores'] == p]
         
         col_field, col_data = st.columns([2, 1])
@@ -374,7 +421,6 @@ elif st.session_state.tela == 'Player':
             fig, ax = pitch.draw(figsize=(10, 6))
             
             if len(df_p) > 0:
-                # CORRIGIDO: CMAP VÁLIDO
                 pitch.kdeplot(df_p.FieldX, df_p.FieldY, ax=ax, cmap='GnBu', fill=True, alpha=0.4, levels=30)
                 pitch.scatter(df_p.FieldX, df_p.FieldY, ax=ax, c='#38BDF8', s=40, edgecolors='white')
                 
@@ -386,7 +432,7 @@ elif st.session_state.tela == 'Player':
                         poly = plt.Polygon(hull_points, facecolor='none', edgecolor='#38BDF8', alpha=0.8, linestyle='--', linewidth=2)
                         ax.add_patch(poly)
                     except: pass
-            else: st.info("Sem ações registradas neste período.")
+            else: st.info("No actions recorded in this period.")
             st.pyplot(fig)
 
         with col_data:
@@ -416,5 +462,3 @@ elif st.session_state.tela == 'Player':
             st.graphviz_chart(dot)
 
     except: pass
-
-

@@ -211,9 +211,9 @@ df_lin, df_gol = carregar_radares_csv(URL_RADAR_LINHA, URL_RADAR_GOLEIROS)
 # --- SIDEBAR ---
 st.sidebar.image(corrigir_link_imagem(URL_LOGO), width=160)
 st.sidebar.markdown("### DATA INTELLIGENCE")
-if st.sidebar.button("PÁGINA INICIAL"): st.session_state.tela = 'Home'
-if st.sidebar.button("VISÃO GERAL"): st.session_state.tela = 'Equipe'
-if st.sidebar.button("ELENCO"): st.session_state.tela = 'Grid'
+if st.sidebar.button("Home Page"): st.session_state.tela = 'Home'
+if st.sidebar.button("OVERVIEW"): st.session_state.tela = 'Equipe'
+if st.sidebar.button("SQUAD"): st.session_state.tela = 'Grid'
 st.sidebar.divider()
 
 col_link = None
@@ -243,15 +243,15 @@ else:
 
 # --- TELAS ---
 if st.session_state.tela == 'Home':
-    st.title("Central de Inteligência")
+    st.title("WELCOME TO DATA INTELLIGENCE")
     c1, c2 = st.columns(2)
-    c1.info("Sistema conectado. Use a barra lateral para navegar.")
+    c1.info("System connected. Use the sidebar to navigate..")
 
 elif st.session_state.tela == 'Equipe':
-    st.title("Análise Tática e Coletiva")
+    st.title("Tactical and Collective Analysis")
     
     if not df_camp.empty:
-        st.subheader("Desempenho da Temporada")
+        st.subheader("Season Performance")
         vitorias = len(df_camp[df_camp['Resultado'].str.contains('Vitória', na=False, case=False)])
         empates = len(df_camp[df_camp['Resultado'].str.contains('Empate', na=False, case=False)])
         jogos = len(df_camp)
@@ -260,10 +260,10 @@ elif st.session_state.tela == 'Equipe':
         gols_pro = pd.to_numeric(df_camp['Gols Pro'], errors='coerce').sum()
         
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Aproveitamento", f"{aproveitamento:.1f}%")
-        m2.metric("Vitórias", vitorias)
-        m3.metric("Jogos", jogos)
-        m4.metric("Gols Pró", int(gols_pro))
+        m1.metric("Win Rate", f"{aproveitamento:.1f}%")
+        m2.metric("Wins", vitorias)
+        m3.metric("Matches", jogos)
+        m4.metric("Goals For", int(gols_pro))
         st.divider()
 
     t1, t2, t3 = st.tabs(["Classificação", "Estatísticas", "Campo de Jogo"])
@@ -283,12 +283,12 @@ elif st.session_state.tela == 'Equipe':
 
     with t3:
         if not df_jogo_filtrado.empty:
-            st.markdown(f"**Analisando minutos: {min_slider[0]}' - {min_slider[1]}'**")
+            st.markdown(f"**Analyzing minute: {min_slider[0]}' - {min_slider[1]}'**")
             
             c_mapa, c_passes = st.columns(2)
             
             with c_mapa:
-                st.subheader("Mapa de Ações (Coletivo)")
+                st.subheader("Action Map")
                 pitch = Pitch(pitch_type='statsbomb', pitch_color='#1E293B', line_color='#64748B')
                 fig, ax = pitch.draw(figsize=(10, 7))
                 pitch.scatter(df_jogo_filtrado.FieldX, df_jogo_filtrado.FieldY, ax=ax, c='#38BDF8', s=30, alpha=0.6, edgecolors='white')
@@ -297,7 +297,7 @@ elif st.session_state.tela == 'Equipe':
                 st.pyplot(fig)
             
             with c_passes:
-                st.subheader("Rede de Conexões")
+                st.subheader("Pass Network")
                 if 'Receptor' in df_jogo_filtrado.columns:
                     conexoes = df_jogo_filtrado.dropna(subset=['Receptor'])
                     if not conexoes.empty:
@@ -330,11 +330,11 @@ elif st.session_state.tela == 'Grid':
                 with st.container():
                     st.image(corrigir_link_imagem(at.get('Foto_URL')) or URL_LOGO, width=100)
                     st.write(f"**{at[col_nome_real]}**")
-                    if st.button("VER", key=f"b_{i}"): st.session_state.atleta_sel = at[col_nome_real]; st.session_state.tela='Player'; st.rerun()
+                    if st.button("View", key=f"b_{i}"): st.session_state.atleta_sel = at[col_nome_real]; st.session_state.tela='Player'; st.rerun()
 
 elif st.session_state.tela == 'Player':
     p = st.session_state.atleta_sel
-    if st.button("⬅️ VOLTAR"): st.session_state.tela='Grid'; st.rerun()
+    if st.button("⬅️ Back"): st.session_state.tela='Grid'; st.rerun()
     
     col_nome_real = next((c for c in df_ele.columns if 'Nome' in c and 'Real' in c), df_ele.columns[1])
     dados_atleta = df_ele[df_ele[col_nome_real] == p].iloc[0] if not df_ele.empty else {}
@@ -351,7 +351,7 @@ elif st.session_state.tela == 'Player':
     with col_info:
         st.metric("Posição", dados_atleta.get('Posicao', '-'))
         st.metric("Pé Dominante", dados_atleta.get('Pe_Dominante', '-'))
-        st.metric("Número", dados_atleta.get('Numero', '-'))
+        st.metric("Number", dados_atleta.get('Numero', '-'))
 
     st.divider()
     tipo = 'goleiro' if 'Goleiro' in str(dados_atleta.get('Posicao', '')) else 'linha'
@@ -390,21 +390,21 @@ elif st.session_state.tela == 'Player':
             st.pyplot(fig)
 
         with col_data:
-            st.markdown("##### Conexões do Jogador")
+            st.markdown("##### Player Connections")
             if 'Receptor' in df_jogo_filtrado.columns:
                 recebeu = df_jogo_filtrado[df_jogo_filtrado['Receptor'] == p]['Passador'].value_counts().head(5)
-                st.write("📥 **Recebeu mais de:**")
+                st.write("📥 **Received most from:**")
                 if not recebeu.empty: st.dataframe(recebeu, use_container_width=True)
                 
                 tocou = df_jogo_filtrado[df_jogo_filtrado['Passador'] == p]['Receptor'].value_counts().head(5)
-                st.write("📤 **Tocou mais para:**")
+                st.write("📤 **Passed most to:**")
                 if not tocou.empty: st.dataframe(tocou, use_container_width=True)
 
     try:
         df_mve = carregar_planilha_csv(URL_MVE)
         mve_p = df_mve[df_mve['Atleta'].str.strip() == str(p).strip()]
         if not mve_p.empty:
-            st.divider(); st.subheader("MVE - Mapa de Vulnerabilidade")
+            st.divider(); st.subheader("MVE - Vulnerability Map")
             dot = graphviz.Digraph(graph_attr={'rankdir':'LR', 'bgcolor':'transparent'})
             dot.node('root', p, shape='circle', style='filled', fillcolor='#38BDF8', fontcolor='black')
             for _, r in mve_p.iterrows():
@@ -414,4 +414,5 @@ elif st.session_state.tela == 'Player':
                 dot.node(ind, ind, shape='note', style='filled', fillcolor='#334155', fontcolor='white')
                 dot.edge('root', ac); dot.edge(ac, ind, color=cc, penwidth='2')
             st.graphviz_chart(dot)
+
     except: pass
